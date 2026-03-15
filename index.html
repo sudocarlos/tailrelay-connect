@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TailRelay LNDConnect</title>
+  <title>Tailrelay Connect</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -129,15 +129,15 @@
 <body>
 
 <header>
-  <h1>TailRelay LNDConnect</h1>
-  <p>Replace an onion/local LND address with your Tailscale relay host</p>
+  <h1>Tailrelay Connect</h1>
+  <p>Replace an onion address with your Tailscale relay host</p>
 </header>
 
 <div class="card">
   <div class="field">
-    <label for="lnd-url">LND Connect REST URL</label>
+    <label for="lnd-url">Connection string</label>
     <textarea id="lnd-url" spellcheck="false" autocomplete="off"
-      placeholder="lndconnect://abc123.onion:8080?macaroon=…"></textarea>
+      placeholder="lndconnect://abc123.onion:8080?macaroon=… or https://abc123.onion:8080 or clnrest://abc123.onion:3010"></textarea>
     <span class="error-msg" id="err-url"></span>
   </div>
 
@@ -156,7 +156,7 @@
 
 <div id="output">
   <div class="url-block">
-    <p class="output-label">Transformed URL</p>
+    <p class="output-label">New connection string</p>
     <code id="result-url"></code>
     <button id="btn-copy">Copy</button>
   </div>
@@ -2522,10 +2522,16 @@ function splitHostPort(hp) {
   return [host, port];
 }
 
+// Match the host:port immediately after any scheme://
+// Captures: [1] everything up to and including ://, [2] host, [3] :port, [4] remainder
+var HOST_PORT_RE = /^(.*?:\/\/)([^:/\s?#]+)(:\d+)([\s\S]*)$/;
+
 function transformUrl(raw, hp) {
-  var parsed = new URL(raw.trim().replace(/^lndconnect:\/\//i, 'https://'));
+  var input  = raw.trim();
   var parts  = splitHostPort(hp.trim());
-  return 'lndconnect://' + parts[0] + ':' + parts[1] + parsed.search;
+  var m      = HOST_PORT_RE.exec(input);
+  if (!m) throw new Error('No host:port found after a :// scheme');
+  return m[1] + parts[0] + ':' + parts[1] + m[4];
 }
 
 function validate() {
@@ -2534,12 +2540,9 @@ function validate() {
   var raw = elUrl.value.trim(), hp = elHost.value.trim();
 
   if (!raw) {
-    showError(errUrl, 'LND Connect URL is required.'); ok = false;
-  } else if (!/^lndconnect:\/\//i.test(raw)) {
-    showError(errUrl, 'URL must start with lndconnect://'); ok = false;
-  } else {
-    try { new URL(raw.replace(/^lndconnect:\/\//i, 'https://')); }
-    catch (e) { showError(errUrl, 'Could not parse URL — check for typos.'); ok = false; }
+    showError(errUrl, 'Connection string is required.'); ok = false;
+  } else if (!HOST_PORT_RE.test(raw)) {
+    showError(errUrl, 'No host:port found — string must contain a :// scheme followed by a host and port.'); ok = false;
   }
 
   if (!hp) {
